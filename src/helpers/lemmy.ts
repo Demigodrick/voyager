@@ -8,7 +8,7 @@ import {
 export const LEMMY_SERVERS =
   "CUSTOM_LEMMY_SERVERS" in window
     ? (window.CUSTOM_LEMMY_SERVERS as string[])
-    : ["lemmy.world", "lemmy.ml", "beehaw.org", "sh.itjust.works"];
+    : ["lemmy.zip", "lemmy.world"];
 
 export interface LemmyJWT {
   sub: number;
