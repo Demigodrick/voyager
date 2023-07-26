@@ -16,6 +16,7 @@ import CommentEllipsis from "./CommentEllipsis";
 import { useAppSelector } from "../../store";
 import Save from "../labels/Save";
 import Edited from "../labels/Edited";
+import { isNative } from "../../helpers/device";
 
 const rainbowColors = [
   "#FF0000", // Red
@@ -76,7 +77,7 @@ export const Container = styled.div<{
   position: relative;
   width: 100%;
 
-  font-size: 0.875em;
+  font-size: 0.9375em;
 
   display: flex;
   flex-direction: column;
@@ -120,6 +121,8 @@ const Header = styled.div`
   display: flex;
   align-items: center;
 
+  font-size: 0.875rem;
+
   gap: 0.5rem;
 
   color: var(--ion-color-medium2);
@@ -127,6 +130,9 @@ const Header = styled.div`
 
 const StyledPersonLabel = styled(PersonLink)`
   color: var(--ion-text-color);
+
+  min-width: 0;
+  overflow: hidden;
 `;
 
 const Content = styled.div`
@@ -203,6 +209,7 @@ export default function Comment({
 
   useEffect(() => {
     if (highlightedCommentId !== comment.id) return;
+    if (isNative()) return;
 
     setTimeout(() => {
       commentRef.current?.scrollIntoView({

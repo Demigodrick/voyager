@@ -28,9 +28,10 @@ import { RefresherCustomEvent } from "@ionic/core";
 import { getPost } from "../post/postSlice";
 import useClient from "../../helpers/useClient";
 import { useSetActivePage } from "../auth/AppContext";
-import { FeedContext } from "../feed/FeedContext";
+import { CommentsContext } from "./CommentsContext";
 import { jwtSelector } from "../auth/authSlice";
 import { defaultCommentDepthSelector } from "../settings/settingsSlice";
+import { isSafariFeedHackEnabled } from "../../pages/shared/FeedContent";
 
 const centerCss = css`
   position: relative;
@@ -69,10 +70,11 @@ interface CommentsProps {
   commentPath?: string;
   op: Person;
   sort: CommentSortType;
+  bottomPadding?: number;
 }
 
 export default forwardRef<CommentsHandle, CommentsProps>(function Comments(
-  { header, postId, commentPath, op, sort },
+  { header, postId, commentPath, op, sort, bottomPadding },
   ref
 ) {
   const dispatch = useAppDispatch();
@@ -276,7 +278,7 @@ export default forwardRef<CommentsHandle, CommentsProps>(function Comments(
   }, [commentTree, comments.length, highlightedCommentId, loading, op]);
 
   return (
-    <FeedContext.Provider
+    <CommentsContext.Provider
       value={{
         refresh: () => fetchComments(true),
         appendComments,
@@ -286,11 +288,14 @@ export default forwardRef<CommentsHandle, CommentsProps>(function Comments(
       <IonRefresher
         slot="fixed"
         onIonRefresh={handleRefresh}
-        disabled={!isListAtTop}
+        disabled={isSafariFeedHackEnabled && !isListAtTop}
       >
         <IonRefresherContent />
       </IonRefresher>
       <Virtuoso
+        className={
+          isSafariFeedHackEnabled ? undefined : "ion-content-scroll-host"
+        }
         ref={virtuosoRef}
         style={{ height: "100%" }}
         totalCount={allComments.length + 1}
@@ -301,11 +306,11 @@ export default forwardRef<CommentsHandle, CommentsProps>(function Comments(
           typeof commentId === "number"
             ? {
                 // add space for the <ViewAllComments /> fixed component
-                Footer: () => <div style={{ height: "70px" }} />,
+                Footer: () => <div style={{ height: `${bottomPadding}px` }} />,
               }
             : {}
         }
       />
-    </FeedContext.Provider>
+    </CommentsContext.Provider>
   );
 });

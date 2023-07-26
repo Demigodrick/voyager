@@ -21,6 +21,8 @@ import {
   OCommentDefaultSort,
   InstanceUrlDisplayMode,
   OInstanceUrlDisplayMode,
+  VoteDisplayMode,
+  OVoteDisplayMode,
 } from "../../services/db";
 import { get, set } from "./storage";
 import { Mode } from "@ionic/core";
@@ -52,6 +54,9 @@ interface SettingsState {
       thumbnailsPosition: CompactThumbnailPositionType;
       showVotingButtons: boolean;
     };
+    voting: {
+      voteDisplayMode: VoteDisplayMode;
+    };
     dark: {
       usingSystemDarkMode: boolean;
       userDarkMode: boolean;
@@ -66,6 +71,7 @@ interface SettingsState {
     posts: {
       disableMarkingRead: boolean;
       markReadOnScroll: boolean;
+      showHideReadButton: boolean;
     };
   };
 }
@@ -100,6 +106,9 @@ const initialState: SettingsState = {
       thumbnailsPosition: OCompactThumbnailPositionType.Left,
       showVotingButtons: true,
     },
+    voting: {
+      voteDisplayMode: OVoteDisplayMode.Total,
+    },
     dark: {
       usingSystemDarkMode: true,
       userDarkMode: false,
@@ -114,6 +123,7 @@ const initialState: SettingsState = {
     posts: {
       disableMarkingRead: false,
       markReadOnScroll: false,
+      showHideReadButton: false,
     },
   },
 };
@@ -197,6 +207,10 @@ export const appearanceSlice = createSlice({
       state.appearance.compact.thumbnailsPosition = action.payload;
       db.setSetting("compact_thumbnail_position_type", action.payload);
     },
+    setVoteDisplayMode(state, action: PayloadAction<VoteDisplayMode>) {
+      state.appearance.voting.voteDisplayMode = action.payload;
+      db.setSetting("vote_display_mode", action.payload);
+    },
     setUserDarkMode(state, action: PayloadAction<boolean>) {
       state.appearance.dark.userDarkMode = action.payload;
       set(LOCALSTORAGE_KEYS.DARK.USER_MODE, action.payload);
@@ -222,6 +236,11 @@ export const appearanceSlice = createSlice({
       state.general.posts.markReadOnScroll = action.payload;
 
       db.setSetting("mark_read_on_scroll", action.payload);
+    },
+    setShowHideReadButton(state, action: PayloadAction<boolean>) {
+      state.general.posts.showHideReadButton = action.payload;
+
+      db.setSetting("show_hide_read_button", action.payload);
     },
 
     resetSettings: () => ({
@@ -284,11 +303,15 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
       const compact_show_voting_buttons = await db.getSetting(
         "compact_show_voting_buttons"
       );
+      const vote_display_mode = await db.getSetting("vote_display_mode");
       const default_comment_sort = await db.getSetting("default_comment_sort");
       const disable_marking_posts_read = await db.getSetting(
         "disable_marking_posts_read"
       );
       const mark_read_on_scroll = await db.getSetting("mark_read_on_scroll");
+      const show_hide_read_button = await db.getSetting(
+        "show_hide_read_button"
+      );
 
       return {
         ...state.settings,
@@ -312,6 +335,11 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
               compact_show_voting_buttons ??
               initialState.appearance.compact.showVotingButtons,
           },
+          voting: {
+            voteDisplayMode:
+              vote_display_mode ??
+              initialState.appearance.voting.voteDisplayMode,
+          },
         },
         general: {
           comments: {
@@ -327,6 +355,9 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
             markReadOnScroll:
               mark_read_on_scroll ??
               initialState.general.posts.markReadOnScroll,
+            showHideReadButton:
+              show_hide_read_button ??
+              initialState.general.posts.showHideReadButton,
           },
         },
       };
@@ -352,6 +383,7 @@ export const {
   setPostAppearance,
   setThumbnailPosition,
   setShowVotingButtons,
+  setVoteDisplayMode,
   setUserDarkMode,
   setUseSystemDarkMode,
   setDeviceMode,
@@ -359,6 +391,7 @@ export const {
   settingsReady,
   setDisableMarkingPostsRead,
   setMarkPostsReadOnScroll,
+  setShowHideReadButton,
 } = appearanceSlice.actions;
 
 export default appearanceSlice.reducer;

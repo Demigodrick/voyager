@@ -1,7 +1,6 @@
 import {
   IonBackButton,
   IonButtons,
-  IonContent,
   IonHeader,
   IonPage,
   IonToolbar,
@@ -23,6 +22,10 @@ import { TitleSearchProvider } from "../../features/community/titleSearch/TitleS
 import TitleSearchResults from "../../features/community/titleSearch/TitleSearchResults";
 import FeedScrollObserver from "../../features/feed/FeedScrollObserver";
 import { markReadOnScrollSelector } from "../../features/settings/settingsSlice";
+import FeedContent from "./FeedContent";
+import FeedContextProvider from "../../features/feed/FeedContext";
+import SpecialFeedMoreActions from "../../features/feed/SpecialFeedMoreActions";
+import PostFabs from "../../features/feed/postFabs/PostFabs";
 
 interface SpecialFeedProps {
   type: ListingType;
@@ -46,6 +49,7 @@ export default function SpecialFeedPage({ type }: SpecialFeedProps) {
         type_: type,
         auth: jwt,
       });
+
       return response.posts;
     },
     [client, sort, type, jwt]
@@ -55,32 +59,36 @@ export default function SpecialFeedPage({ type }: SpecialFeedProps) {
 
   return (
     <TitleSearchProvider>
-      <IonPage>
-        <IonHeader>
-          <IonToolbar>
-            <IonButtons slot="start">
-              <IonBackButton
-                text="Communities"
-                defaultHref={buildGeneralBrowseLink("")}
-              />
-            </IonButtons>
-
-            <TitleSearch name={listingTypeTitle(type)}>
-              <IonButtons slot="end">
-                <PostSort />
+      <FeedContextProvider>
+        <IonPage>
+          <IonHeader>
+            <IonToolbar>
+              <IonButtons slot="start">
+                <IonBackButton
+                  text="Communities"
+                  defaultHref={buildGeneralBrowseLink("")}
+                />
               </IonButtons>
-            </TitleSearch>
-          </IonToolbar>
-        </IonHeader>
-        <IonContent>
-          {markReadOnScroll ? (
-            <FeedScrollObserver>{feed}</FeedScrollObserver>
-          ) : (
-            feed
-          )}
-          <TitleSearchResults />
-        </IonContent>
-      </IonPage>
+
+              <TitleSearch name={listingTypeTitle(type)}>
+                <IonButtons slot="end">
+                  <PostSort />
+                  <SpecialFeedMoreActions />
+                </IonButtons>
+              </TitleSearch>
+            </IonToolbar>
+          </IonHeader>
+          <FeedContent>
+            {markReadOnScroll ? (
+              <FeedScrollObserver>{feed}</FeedScrollObserver>
+            ) : (
+              feed
+            )}
+            <TitleSearchResults />
+            <PostFabs />
+          </FeedContent>
+        </IonPage>
+      </FeedContextProvider>
     </TitleSearchProvider>
   );
 }
