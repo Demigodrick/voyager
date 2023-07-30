@@ -14,6 +14,7 @@ import {
   bagCheckOutline,
   cog,
   colorPalette,
+  gitCompareOutline,
   logoGithub,
   mailOutline,
   openOutline,
@@ -140,10 +141,12 @@ export default function SettingsPage() {
         </IonList>
 
         <IonList inset color="primary">
-          <InsetIonItem routerLink="/settings/terms">
-            <IonIcon icon={shieldCheckmarkOutline} color="primary" />
-            <SettingLabel>Terms &amp; Privacy</SettingLabel>
-          </InsetIonItem>
+          {!isNative() ? (
+            <InsetIonItem routerLink="/settings/terms">
+              <IonIcon icon={shieldCheckmarkOutline} color="primary" />
+              <SettingLabel>Terms &amp; Privacy</SettingLabel>
+            </InsetIonItem>
+          ) : undefined}
           <InsetIonItem
             href="https://github.com/aeharding/voyager"
             target="_blank"
@@ -166,6 +169,20 @@ export default function SettingsPage() {
               </sup>
             </SettingLabel>
           </InsetIonItem>
+          {isNative() && (
+            <InsetIonItem
+              href="https://github.com/aeharding/voyager/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              detail={false}
+            >
+              <IonIcon icon={gitCompareOutline} color="medium" />
+              <SettingLabel>Release</SettingLabel>
+              <SettingLabel color="medium" slot="end">
+                {APP_VERSION}
+              </SettingLabel>
+            </InsetIonItem>
+          )}
         </IonList>
       </AppContent>
     </IonPage>

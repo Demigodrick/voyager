@@ -6,6 +6,8 @@ interface FeedContentProps {
   children: React.ReactNode;
 }
 
+// There is some strange behavior that needs to be sorted before this
+// can be enabled
 export const isSafariFeedHackEnabled = !isNative();
 
 // All of this terrible code is to deal with safari being safari >:(
