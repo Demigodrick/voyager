@@ -8,6 +8,16 @@ export interface IPostMetadata {
   hidden_updated_at?: number;
 }
 
+export const OAppThemeType = {
+  Default: "default",
+  FieryMario: "mario",
+  Pistachio: "pistachio",
+  SpookyPumpkin: "pumpkin",
+  UV: "uv",
+} as const;
+
+export type AppThemeType = (typeof OAppThemeType)[keyof typeof OAppThemeType];
+
 export const OPostAppearanceType = {
   Compact: "compact",
   Large: "large",
@@ -77,6 +87,31 @@ export const OVoteDisplayMode = {
 export type VoteDisplayMode =
   (typeof OVoteDisplayMode)[keyof typeof OVoteDisplayMode];
 
+export const OProfileLabelType = {
+  /**
+   * e.g. aeharding@lemmy.world
+   */
+  Handle: "handle",
+
+  /**
+   * e.g. aeharding
+   */
+  Username: "username",
+
+  /**
+   * e.g. lemmy.world
+   */
+  Instance: "instance",
+
+  /**
+   * e.g. Profile
+   */
+  Hide: "hide",
+} as const;
+
+export type ProfileLabelType =
+  (typeof OProfileLabelType)[keyof typeof OProfileLabelType];
+
 const OSwipeActionBase = {
   None: "none",
   Upvote: "upvote",
@@ -116,6 +151,7 @@ export type SettingValueTypes = {
   collapse_comment_threads: CommentThreadCollapse;
   user_instance_url_display: InstanceUrlDisplayMode;
   vote_display_mode: VoteDisplayMode;
+  profile_label: ProfileLabelType;
   post_appearance_type: PostAppearanceType;
   compact_thumbnail_position_type: CompactThumbnailPositionType;
   compact_show_voting_buttons: boolean;
@@ -130,6 +166,7 @@ export type SettingValueTypes = {
   gesture_swipe_inbox: SwipeActions;
   disable_left_swipes: boolean;
   disable_right_swipes: boolean;
+  enable_haptic_feedback: boolean;
 };
 
 export interface ISettingItem<T extends keyof SettingValueTypes> {

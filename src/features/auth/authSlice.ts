@@ -10,6 +10,7 @@ import { resetUsers } from "../user/userSlice";
 import { resetInbox } from "../inbox/inboxSlice";
 import { differenceWith, uniqBy } from "lodash";
 import { resetCommunities } from "../community/communitySlice";
+import { ApplicationContext } from "capacitor-application-context";
 
 const MULTI_ACCOUNT_STORAGE_NAME = "credentials";
 
@@ -174,6 +175,9 @@ export const usernameSelector = createSelector([handleSelector], (handle) => {
 export const isAdminSelector = (state: RootState) =>
   state.auth.site?.my_user?.local_user_view.person.admin;
 
+export const isDownvoteEnabledSelector = (state: RootState) =>
+  state.auth.site?.site_view.local_site.enable_downvotes !== false;
+
 export const localUserSelector = (state: RootState) =>
   state.auth.site?.my_user?.local_user_view.local_user;
 
@@ -288,6 +292,8 @@ export const clientSelector = createSelector([urlSelector], (url) => {
 function updateCredentialsStorage(
   accounts: CredentialStoragePayload | undefined
 ) {
+  updateApplicationContextIfNeeded(accounts);
+
   if (!accounts) {
     localStorage.removeItem(MULTI_ACCOUNT_STORAGE_NAME);
     return;
@@ -329,4 +335,24 @@ function getLoadingSiteId(instance: string, handle: string | undefined) {
   if (!handle) return instance;
 
   return `${instance}-${handle}`;
+}
+
+// Run once on app load to sync state if needed
+updateApplicationContextIfNeeded(getCredentialsFromStorage());
+
+/**
+ * This syncs application state for the Apple Watch App
+ */
+function updateApplicationContextIfNeeded(
+  accounts: CredentialStoragePayload | undefined
+) {
+  ApplicationContext.updateApplicationContext({
+    connectedInstance: accounts
+      ? accounts.activeHandle.slice(accounts.activeHandle.lastIndexOf("@") + 1)
+      : "lemmy.world",
+    authToken: accounts
+      ? accounts.accounts.find((a) => a.handle === accounts.activeHandle)
+          ?.jwt ?? ""
+      : "",
+  });
 }

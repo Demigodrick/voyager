@@ -23,6 +23,9 @@ import {
   OInstanceUrlDisplayMode,
   VoteDisplayMode,
   OVoteDisplayMode,
+  OProfileLabelType,
+  ProfileLabelType,
+  AppThemeType,
 } from "../../services/db";
 import { get, set } from "./storage";
 import { Mode } from "@ionic/core";
@@ -45,6 +48,7 @@ interface SettingsState {
     };
     general: {
       userInstanceUrlDisplay: InstanceUrlDisplayMode;
+      profileLabel: ProfileLabelType;
     };
     posts: {
       blurNsfw: PostBlurNsfwType;
@@ -60,8 +64,10 @@ interface SettingsState {
     dark: {
       usingSystemDarkMode: boolean;
       userDarkMode: boolean;
+      pureBlack: boolean;
     };
     deviceMode: Mode;
+    theme: AppThemeType;
   };
   general: {
     comments: {
@@ -73,6 +79,7 @@ interface SettingsState {
       markReadOnScroll: boolean;
       showHideReadButton: boolean;
     };
+    enableHapticFeedback: boolean;
   };
 }
 
@@ -84,8 +91,10 @@ const LOCALSTORAGE_KEYS = {
   DARK: {
     USE_SYSTEM: "appearance--dark-use-system",
     USER_MODE: "appearance--dark-user-mode",
+    PURE_BLACK: "appearance--pure-black",
   },
   DEVICE_MODE: "appearance--device-mode",
+  THEME: "appearance--theme",
 } as const;
 
 const initialState: SettingsState = {
@@ -97,6 +106,7 @@ const initialState: SettingsState = {
     },
     general: {
       userInstanceUrlDisplay: OInstanceUrlDisplayMode.Never,
+      profileLabel: OProfileLabelType.Instance,
     },
     posts: {
       blurNsfw: OPostBlurNsfw.InFeed,
@@ -112,8 +122,10 @@ const initialState: SettingsState = {
     dark: {
       usingSystemDarkMode: true,
       userDarkMode: false,
+      pureBlack: true,
     },
     deviceMode: "ios",
+    theme: "default",
   },
   general: {
     comments: {
@@ -125,6 +137,7 @@ const initialState: SettingsState = {
       markReadOnScroll: false,
       showHideReadButton: false,
     },
+    enableHapticFeedback: true,
   },
 };
 
@@ -139,8 +152,10 @@ const stateWithLocalstorageItems: SettingsState = merge(initialState, {
     dark: {
       usingSystemDarkMode: get(LOCALSTORAGE_KEYS.DARK.USE_SYSTEM),
       userDarkMode: get(LOCALSTORAGE_KEYS.DARK.USER_MODE),
+      pureBlack: get(LOCALSTORAGE_KEYS.DARK.PURE_BLACK),
     },
     deviceMode: get(LOCALSTORAGE_KEYS.DEVICE_MODE),
+    theme: get(LOCALSTORAGE_KEYS.THEME),
   },
 });
 
@@ -184,6 +199,10 @@ export const appearanceSlice = createSlice({
       state.appearance.general.userInstanceUrlDisplay = action.payload;
       db.setSetting("user_instance_url_display", action.payload);
     },
+    setProfileLabel(state, action: PayloadAction<ProfileLabelType>) {
+      state.appearance.general.profileLabel = action.payload;
+      db.setSetting("profile_label", action.payload);
+    },
     setCommentsCollapsed(state, action: PayloadAction<CommentThreadCollapse>) {
       state.general.comments.collapseCommentThreads = action.payload;
       db.setSetting("collapse_comment_threads", action.payload);
@@ -215,6 +234,10 @@ export const appearanceSlice = createSlice({
       state.appearance.dark.userDarkMode = action.payload;
       set(LOCALSTORAGE_KEYS.DARK.USER_MODE, action.payload);
     },
+    setPureBlack(state, action: PayloadAction<boolean>) {
+      state.appearance.dark.pureBlack = action.payload;
+      set(LOCALSTORAGE_KEYS.DARK.PURE_BLACK, action.payload);
+    },
     setUseSystemDarkMode(state, action: PayloadAction<boolean>) {
       state.appearance.dark.usingSystemDarkMode = action.payload;
       set(LOCALSTORAGE_KEYS.DARK.USE_SYSTEM, action.payload);
@@ -241,6 +264,15 @@ export const appearanceSlice = createSlice({
       state.general.posts.showHideReadButton = action.payload;
 
       db.setSetting("show_hide_read_button", action.payload);
+    },
+    setTheme(state, action: PayloadAction<AppThemeType>) {
+      state.appearance.theme = action.payload;
+      set(LOCALSTORAGE_KEYS.THEME, action.payload);
+    },
+    setEnableHapticFeedback(state, action: PayloadAction<boolean>) {
+      state.general.enableHapticFeedback = action.payload;
+
+      db.setSetting("enable_haptic_feedback", action.payload);
     },
 
     resetSettings: () => ({
@@ -295,6 +327,7 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
       const user_instance_url_display = await db.getSetting(
         "user_instance_url_display"
       );
+      const profile_label = await db.getSetting("profile_label");
       const post_appearance_type = await db.getSetting("post_appearance_type");
       const blur_nsfw = await db.getSetting("blur_nsfw");
       const compact_thumbnail_position_type = await db.getSetting(
@@ -312,6 +345,9 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
       const show_hide_read_button = await db.getSetting(
         "show_hide_read_button"
       );
+      const enable_haptic_feedback = await db.getSetting(
+        "enable_haptic_feedback"
+      );
 
       return {
         ...state.settings,
@@ -322,6 +358,8 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
             userInstanceUrlDisplay:
               user_instance_url_display ??
               initialState.appearance.general.userInstanceUrlDisplay,
+            profileLabel:
+              profile_label ?? initialState.appearance.general.profileLabel,
           },
           posts: {
             type: post_appearance_type ?? initialState.appearance.posts.type,
@@ -359,6 +397,8 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
               show_hide_read_button ??
               initialState.general.posts.showHideReadButton,
           },
+          enableHapticFeedback:
+            enable_haptic_feedback ?? initialState.general.enableHapticFeedback,
         },
       };
     });
@@ -378,6 +418,7 @@ export const {
   setFontSizeMultiplier,
   setUseSystemFontSize,
   setUserInstanceUrlDisplay,
+  setProfileLabel,
   setCommentsCollapsed,
   setNsfwBlur,
   setPostAppearance,
@@ -392,6 +433,9 @@ export const {
   setDisableMarkingPostsRead,
   setMarkPostsReadOnScroll,
   setShowHideReadButton,
+  setTheme,
+  setEnableHapticFeedback,
+  setPureBlack,
 } = appearanceSlice.actions;
 
 export default appearanceSlice.reducer;
