@@ -25,6 +25,11 @@ ion-tab-button {
   justify-content: flex-start;
 }
 
+/* https://github.com/ionic-team/ionic-framework/issues/27777#issuecomment-1631522283 */
+.action-sheet-height-fix {
+  --height: 100%;
+}
+
 ion-modal.small {
   --height: 50%;
   --width: 85%;
@@ -123,4 +128,14 @@ ion-action-sheet ion-icon {
 
 .ion-content-scroll-host::after {
   bottom: -1px;
+}
+
+ion-fab-button {
+  --background-focused: var(--ion-color-primary);
+  --background-activated: var(--ion-color-primary);
+  --background-hover: var(--ion-color-primary);
+}
+
+ion-fab.fab-vertical-top {
+  top: 15vh;
 }

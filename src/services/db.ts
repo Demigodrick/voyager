@@ -14,6 +14,7 @@ export const OAppThemeType = {
   Pistachio: "pistachio",
   SpookyPumpkin: "pumpkin",
   UV: "uv",
+  Mint: "mint",
 } as const;
 
 export type AppThemeType = (typeof OAppThemeType)[keyof typeof OAppThemeType];
@@ -124,6 +125,27 @@ export const OProfileLabelType = {
   Hide: "hide",
 } as const;
 
+export type LinkHandlerType =
+  (typeof OLinkHandlerType)[keyof typeof OLinkHandlerType];
+
+export const OLinkHandlerType = {
+  DefaultBrowser: "default-browser",
+  InApp: "in-app",
+} as const;
+
+export type JumpButtonPositionType =
+  (typeof OJumpButtonPositionType)[keyof typeof OJumpButtonPositionType];
+
+export const OJumpButtonPositionType = {
+  LeftTop: "left-top",
+  LeftMiddle: "left-middle",
+  LeftBottom: "left-bottom",
+  Center: "center",
+  RightTop: "right-top",
+  RightMiddle: "right-middle",
+  RightBottom: "right-bottom",
+} as const;
+
 export type ProfileLabelType =
   (typeof OProfileLabelType)[keyof typeof OProfileLabelType];
 
@@ -183,6 +205,9 @@ export type SettingValueTypes = {
   disable_left_swipes: boolean;
   disable_right_swipes: boolean;
   enable_haptic_feedback: boolean;
+  link_handler: LinkHandlerType;
+  show_jump_button: boolean;
+  jump_button_position: JumpButtonPositionType;
 };
 
 export interface ISettingItem<T extends keyof SettingValueTypes> {
@@ -278,7 +303,7 @@ export class WefwefDB extends Dexie {
     user_handle: string,
     page: number,
     limit: number,
-    lastPageItems?: IPostMetadata[]
+    lastPageItems?: IPostMetadata[],
   ) {
     const filterFn = (metadata: IPostMetadata) =>
       metadata.user_handle === user_handle && metadata.hidden === 1;
@@ -340,7 +365,7 @@ export class WefwefDB extends Dexie {
     specificity?: {
       user_handle?: string;
       community?: string;
-    }
+    },
   ) {
     const { user_handle = "", community = "" } = specificity || {};
 
@@ -378,7 +403,7 @@ export class WefwefDB extends Dexie {
     specificity?: {
       user_handle?: string;
       community?: string;
-    }
+    },
   ) {
     const { user_handle = "", community = "" } = specificity || {};
 

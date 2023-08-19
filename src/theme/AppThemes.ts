@@ -26,7 +26,7 @@ export function getTheme(appTheme: AppThemeType): Theme {
           primary: "color(display-p3 1 0 0)",
         },
         dark: {
-          primary: "color(display-p3 0.85 0.15 0)",
+          primary: "#db1f1f",
         },
       };
     case "pistachio":
@@ -44,7 +44,7 @@ export function getTheme(appTheme: AppThemeType): Theme {
           primary: "color(display-p3 1 0.5 0)",
         },
         dark: {
-          primary: "color(display-p3 1 0.5 0)",
+          primary: "#DF6F0E",
         },
       };
     case "uv":
@@ -53,7 +53,16 @@ export function getTheme(appTheme: AppThemeType): Theme {
           primary: "color(display-p3 0.5 0 1)",
         },
         dark: {
-          primary: "color(display-p3 0.57 0 1)",
+          primary: "#942AD4",
+        },
+      };
+    case "mint":
+      return {
+        light: {
+          primary: "#36BB97",
+        },
+        dark: {
+          primary: "#53C391",
         },
       };
   }
@@ -61,7 +70,7 @@ export function getTheme(appTheme: AppThemeType): Theme {
 
 export function getThemeByStyle(
   appTheme: AppThemeType,
-  style: "light" | "dark"
+  style: "light" | "dark",
 ): Colors {
   return getTheme(appTheme)[style];
 }
