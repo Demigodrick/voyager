@@ -13,9 +13,24 @@ import { IPostMetadata, db } from "../../services/db";
 
 const POST_SORT_KEY = "post-sort-v2";
 
+interface PostHiddenData {
+  /**
+   * Is post hidden?
+   */
+  hidden: boolean;
+
+  /**
+   * Should post be immediately hidden from feed, or just on next refresh?
+   *
+   * (For example: User pressing "hide" immediately hides,
+   * vs "auto hide" hiding on refresh)
+   */
+  immediate: boolean;
+}
+
 interface PostState {
   postById: Dictionary<PostView | "not-found">;
-  postHiddenById: Dictionary<boolean>;
+  postHiddenById: Dictionary<PostHiddenData>;
   postVotesById: Dictionary<1 | -1 | 0>;
   postSavedById: Dictionary<boolean>;
   postReadById: Dictionary<boolean>;
@@ -58,6 +73,9 @@ export const postSlice = createSlice({
     receivedPostNotFound: (state, action: PayloadAction<number>) => {
       state.postById[action.payload] = "not-found";
     },
+    resetHidden: (state) => {
+      state.postHiddenById = {};
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -66,7 +84,12 @@ export const postSlice = createSlice({
 
         for (const post of posts) {
           state.postById[post.post.id] = post;
-          state.postHiddenById[post.post.id] = postHiddenById[post.post.id];
+          const hidden = postHiddenById[post.post.id];
+          if (hidden)
+            state.postHiddenById[post.post.id] = {
+              hidden,
+              immediate: true,
+            };
           if (post.read) state.postReadById[post.post.id] = post.read;
 
           if (post.my_vote)
@@ -78,13 +101,19 @@ export const postSlice = createSlice({
       .addCase(updatePostHidden.fulfilled, (state, action) => {
         if (!action.payload) return;
 
-        state.postHiddenById[action.payload.post_id] = !!action.payload.hidden;
+        state.postHiddenById[action.payload.metadata.post_id] = {
+          hidden: !!action.payload.metadata.hidden,
+          immediate: action.payload.immediate,
+        };
       })
       .addCase(bulkUpdatePostsHidden.fulfilled, (state, action) => {
         if (!action.payload) return;
 
-        for (const metadata of action.payload) {
-          state.postHiddenById[metadata.post_id] = !!metadata.hidden;
+        for (const metadata of action.payload.metadata) {
+          state.postHiddenById[metadata.post_id] = {
+            hidden: !!metadata.hidden,
+            immediate: action.payload.immediate,
+          };
         }
       });
   },
@@ -92,7 +121,14 @@ export const postSlice = createSlice({
 
 export const updatePostHidden = createAsyncThunk(
   "post/updatePostHidden",
-  async ({ postId, hidden }: { postId: number; hidden: boolean }, thunkAPI) => {
+  async (
+    {
+      postId,
+      hidden,
+      immediate,
+    }: { postId: number; hidden: boolean; immediate: boolean },
+    thunkAPI,
+  ) => {
     const rootState = thunkAPI.getState() as RootState;
     const handle = handleSelector(rootState);
 
@@ -107,14 +143,18 @@ export const updatePostHidden = createAsyncThunk(
 
     await db.upsertPostMetadata(newPostMetadata);
 
-    return newPostMetadata;
+    return { metadata: newPostMetadata, immediate };
   },
 );
 
 export const bulkUpdatePostsHidden = createAsyncThunk(
   "post/bulkUpdatePostsHidden",
   async (
-    { postIds, hidden }: { postIds: number[]; hidden: boolean },
+    {
+      postIds,
+      hidden,
+      immediate,
+    }: { postIds: number[]; hidden: boolean; immediate: boolean },
     thunkAPI,
   ) => {
     const rootState = thunkAPI.getState() as RootState;
@@ -133,7 +173,7 @@ export const bulkUpdatePostsHidden = createAsyncThunk(
       newPostMetadata.map((metadata) => db.upsertPostMetadata(metadata)),
     );
 
-    return newPostMetadata;
+    return { metadata: newPostMetadata, immediate };
   },
 );
 
@@ -172,6 +212,7 @@ export const {
   updatePostSaved,
   updatePostRead,
   receivedPostNotFound,
+  resetHidden,
 } = postSlice.actions;
 
 export default postSlice.reducer;
@@ -183,15 +224,10 @@ export const savePost =
 
     dispatch(updatePostSaved({ postId, saved: save }));
 
-    const jwt = jwtSelector(getState());
-
-    if (!jwt) throw new Error("Not authorized");
-
     try {
       await clientSelector(getState())?.savePost({
         post_id: postId,
         save,
-        auth: jwt,
       });
     } catch (error) {
       dispatch(updatePostSaved({ postId, saved: oldSaved }));
@@ -201,20 +237,21 @@ export const savePost =
   };
 
 export const setPostRead =
-  (postId: number) =>
+  (postId: number, autoHideDisabled = false) =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
+    if (!jwtSelector(getState())) return;
     if (getState().settings.general.posts.disableMarkingRead) return;
 
-    const jwt = jwtSelector(getState());
-    if (!jwt) return;
+    if (getState().settings.general.posts.autoHideRead && !autoHideDisabled)
+      dispatch(hidePost(postId, false));
 
-    dispatch(updatePostRead({ postId }));
-
-    await clientSelector(getState())?.markPostAsRead({
-      post_id: postId,
-      read: true,
-      auth: jwt,
-    });
+    if (!getState().post.postReadById[postId]) {
+      dispatch(updatePostRead({ postId }));
+      await clientSelector(getState())?.markPostAsRead({
+        post_id: postId,
+        read: true,
+      });
+    }
   };
 
 export const voteOnPost =
@@ -224,17 +261,12 @@ export const voteOnPost =
 
     dispatch(updatePostVote({ postId, vote }));
 
-    const jwt = jwtSelector(getState());
-
-    if (!jwt) throw new Error("Not authorized");
-
     dispatch(setPostRead(postId));
 
     try {
       await clientSelector(getState())?.likePost({
         post_id: postId,
         score: vote,
-        auth: jwt,
       });
     } catch (error) {
       dispatch(updatePostVote({ postId, vote: oldVote }));
@@ -244,14 +276,11 @@ export const voteOnPost =
 
 export const getPost =
   (id: number) => async (dispatch: AppDispatch, getState: () => RootState) => {
-    const jwt = jwtSelector(getState());
-
     let result;
 
     try {
       result = await clientSelector(getState()).getPost({
         id,
-        auth: jwt,
       });
     } catch (error) {
       // I think there is a bug in lemmy-js-client where it tries to parse 404 with non-json body
@@ -262,19 +291,16 @@ export const getPost =
       throw error;
     }
 
-    if (result) dispatch(receivedPosts([result.post_view]));
+    dispatch(receivedPosts([result.post_view]));
+    return result;
   };
 
 export const deletePost =
   (id: number) => async (dispatch: AppDispatch, getState: () => RootState) => {
-    const jwt = jwtSelector(getState());
-    if (!jwt) return;
-
     try {
       await clientSelector(getState()).deletePost({
         post_id: id,
         deleted: true,
-        auth: jwt,
       });
     } catch (error) {
       // I think there is a bug in lemmy-js-client where it tries to parse 404 with non-json body
@@ -290,18 +316,31 @@ export const deletePost =
     dispatch(receivedPostNotFound(id));
   };
 
-export const hidePost = (postId: number) => async (dispatch: AppDispatch) => {
-  await dispatch(updatePostHidden({ postId, hidden: true }));
-};
-
-export const hidePosts =
-  (postIds: number[]) => async (dispatch: AppDispatch) => {
-    await dispatch(bulkUpdatePostsHidden({ postIds, hidden: true }));
+export const hidePost =
+  (postId: number, immediate = true) =>
+  async (dispatch: AppDispatch) => {
+    await dispatch(updatePostHidden({ postId, hidden: true, immediate }));
   };
 
-export const unhidePost = (postId: number) => async (dispatch: AppDispatch) => {
-  await dispatch(updatePostHidden({ postId, hidden: false }));
-};
+export const hidePosts =
+  (postIds: number[], immediate = true) =>
+  async (dispatch: AppDispatch) => {
+    await dispatch(bulkUpdatePostsHidden({ postIds, hidden: true, immediate }));
+  };
+
+export const unhidePost =
+  (postId: number, immediate = true) =>
+  async (dispatch: AppDispatch) => {
+    await dispatch(updatePostHidden({ postId, hidden: false, immediate }));
+  };
+
+export const clearHidden =
+  () => async (dispatch: AppDispatch, getState: () => RootState) => {
+    const handle = handleSelector(getState());
+    if (!handle) return;
+    await db.clearHiddenPosts(handle);
+    await dispatch(resetHidden());
+  };
 
 export const postHiddenByIdSelector = (state: RootState) => {
   return state.post.postHiddenById;

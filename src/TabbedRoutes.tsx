@@ -32,7 +32,6 @@ import styled from "@emotion/styled";
 import UserPage from "./pages/profile/UserPage";
 import SettingsPage from "./pages/settings/SettingsPage";
 import { useContext, useEffect, useMemo, useRef } from "react";
-import { AppContext } from "./features/auth/AppContext";
 import InstallAppPage from "./pages/settings/InstallAppPage";
 import SearchPage, { focusSearchBar } from "./pages/search/SearchPage";
 import SearchPostsResultsPage from "./pages/search/results/SearchFeedResultsPage";
@@ -70,6 +69,9 @@ import AppearanceThemePage from "./pages/settings/AppearanceThemePage";
 import GalleryProvider from "./features/gallery/GalleryProvider";
 import AppIconPage from "./pages/settings/AppIconPage";
 import { DefaultFeedType, ODefaultFeedType } from "./services/db";
+import { AppContext } from "./features/auth/AppContext";
+import SearchFeedResultsPage from "./pages/search/results/SearchFeedResultsPage";
+import { resetSavedStatusTap } from "./statusTap";
 
 const Interceptor = styled.div`
   position: absolute;
@@ -132,6 +134,10 @@ export default function TabbedRoutes() {
     };
   }, [router]);
 
+  useEffect(() => {
+    resetSavedStatusTap();
+  }, [location]);
+
   const userHandle = useAppSelector(handleSelector);
   const profileLabelType = useAppSelector(
     (state) => state.settings.appearance.general.profileLabel,
@@ -146,11 +152,12 @@ export default function TabbedRoutes() {
   const isInboxButtonDisabled = location.pathname.startsWith("/inbox");
   const isProfileButtonDisabled = location.pathname.startsWith("/profile");
   const isSearchButtonDisabled = location.pathname.startsWith("/search");
+  const isSettingsButtonDisabled = location.pathname.startsWith("/settings");
 
   async function onPostsClick() {
     if (!isPostsButtonDisabled) return;
 
-    if (await scrollUpIfNeeded(activePageRef?.current)) return;
+    if (scrollUpIfNeeded(activePageRef?.current)) return;
 
     if (location.pathname.endsWith(jwt ? "/home" : "/all")) {
       router.push(`/posts/${actor ?? iss ?? getDefaultServer()}`, "back");
@@ -177,7 +184,12 @@ export default function TabbedRoutes() {
   async function onInboxClick() {
     if (!isInboxButtonDisabled) return;
 
-    if (await scrollUpIfNeeded(activePageRef?.current)) return;
+    if (
+      // Messages are in reverse order, so bail on scroll up
+      !location.pathname.startsWith("/inbox/messages/") &&
+      scrollUpIfNeeded(activePageRef?.current)
+    )
+      return;
 
     router.push(`/inbox`, "back");
   }
@@ -185,7 +197,7 @@ export default function TabbedRoutes() {
   async function onProfileClick() {
     if (!isProfileButtonDisabled) return;
 
-    if (await scrollUpIfNeeded(activePageRef?.current)) return;
+    if (scrollUpIfNeeded(activePageRef?.current)) return;
 
     router.push("/profile", "back");
   }
@@ -196,9 +208,17 @@ export default function TabbedRoutes() {
     // if the search page is already open, focus the search bar
     focusSearchBar();
 
-    if (await scrollUpIfNeeded(activePageRef?.current)) return;
+    if (scrollUpIfNeeded(activePageRef?.current)) return;
 
     router.push(`/search`, "back");
+  }
+
+  async function onSettingsClick() {
+    if (!isSettingsButtonDisabled) return;
+
+    if (scrollUpIfNeeded(activePageRef?.current)) return;
+
+    router.push(`/settings`, "back");
   }
 
   function buildGeneralBrowseRoutes(tab: string) {
@@ -207,6 +227,18 @@ export default function TabbedRoutes() {
       <Route exact path={`/${tab}/:actor/c/:community`}>
         <ActorRedirect>
           <CommunityPage />
+        </ActorRedirect>
+      </Route>,
+      // eslint-disable-next-line react/jsx-key
+      <Route exact path={`/${tab}/:actor/c/:community/search/posts/:search`}>
+        <ActorRedirect>
+          <SearchFeedResultsPage type="Posts" />
+        </ActorRedirect>
+      </Route>,
+      // eslint-disable-next-line react/jsx-key
+      <Route exact path={`/${tab}/:actor/c/:community/search/comments/:search`}>
+        <ActorRedirect>
+          <SearchFeedResultsPage type="Comments" />
         </ActorRedirect>
       </Route>,
       // eslint-disable-next-line react/jsx-key
@@ -312,6 +344,11 @@ export default function TabbedRoutes() {
         <Route exact path="/posts/:actor/local">
           <ActorRedirect>
             <SpecialFeedPage type="Local" />
+          </ActorRedirect>
+        </Route>
+        <Route exact path="/posts/:actor/mod">
+          <ActorRedirect>
+            <SpecialFeedPage type="ModeratorView" />
           </ActorRedirect>
         </Route>
         <Route exact path="/posts/:actor">
@@ -485,12 +522,17 @@ export default function TabbedRoutes() {
               <IonLabel>Search</IonLabel>
               <Interceptor onClick={onSearchClick} />
             </IonTabButton>
-            <IonTabButton tab="settings" href="/settings">
+            <IonTabButton
+              tab="settings"
+              href="/settings"
+              disabled={isSettingsButtonDisabled}
+            >
               <IonIcon aria-hidden="true" icon={cog} />
               <IonLabel>Settings</IonLabel>
               {settingsNotificationCount ? (
                 <IonBadge color="danger">{settingsNotificationCount}</IonBadge>
               ) : undefined}
+              <Interceptor onClick={onSettingsClick} />
             </IonTabButton>
           </IonTabBar>
         </IonTabs>
@@ -507,6 +549,8 @@ function getPathForFeed(defaultFeed: DefaultFeedType): string {
       return "/home";
     case ODefaultFeedType.Local:
       return "/local";
+    case ODefaultFeedType.Moderating:
+      return "/mod";
     case ODefaultFeedType.CommunityList:
       return "";
     case ODefaultFeedType.Community:

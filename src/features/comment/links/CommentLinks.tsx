@@ -9,6 +9,7 @@ import customRemarkGfm from "../../shared/markdown/customRemarkGfm";
 import { useAppSelector } from "../../../store";
 import { Link, Text } from "mdast";
 import { uniqBy } from "lodash";
+import { isValidUrl } from "../../../helpers/url";
 
 const Container = styled.div`
   display: flex;
@@ -31,6 +32,10 @@ export default function CommentLinks({ markdown }: CommentLinksProps) {
     (state) => state.auth.connectedInstance,
   );
 
+  const { showCommentImages } = useAppSelector(
+    (state) => state.settings.general.comments,
+  );
+
   const links = useMemo(() => {
     // Initialize a unified processor with the remark-parse parser
 
@@ -49,7 +54,7 @@ export default function CommentLinks({ markdown }: CommentLinksProps) {
     visit(mdastTree, ["link", "image"], (_node) => {
       const node = _node as Link;
 
-      if (node.type === "link" || node.type === "image")
+      if (node.type === "link" || (!showCommentImages && node.type === "image"))
         links.push({
           type: node.type,
           url: node.url,
@@ -63,11 +68,14 @@ export default function CommentLinks({ markdown }: CommentLinksProps) {
     // Dedupe by url
     links = uniqBy(links, (l) => l.url);
 
+    // e.g. `http://127.0.0.1:8080”`
+    links = links.filter(({ url }) => isValidUrl(url));
+
     // Max 4 links
     links = links.slice(0, 4);
 
     return links;
-  }, [markdown, connectedInstance]);
+  }, [markdown, connectedInstance, showCommentImages]);
 
   if (!links.length) return;
 

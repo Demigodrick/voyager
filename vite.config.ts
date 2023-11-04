@@ -6,6 +6,10 @@ import legacy from "@vitejs/plugin-legacy";
 
 import fs from "fs";
 
+import { readFileSync } from "fs";
+
+const manifest = JSON.parse(readFileSync("./manifest.json", "utf-8"));
+
 // https://github.com/vitejs/vite/issues/2415#issuecomment-1381196720
 const dotPathFixPlugin = () => ({
   name: "dot-path-fix-plugin",
@@ -38,6 +42,8 @@ export default defineConfig({
     svgr(),
     VitePWA({
       registerType: "prompt",
+      manifestFilename: "manifest.json",
+      manifest,
       workbox: {
         runtimeCaching: [
           {

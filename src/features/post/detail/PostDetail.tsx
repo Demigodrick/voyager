@@ -31,6 +31,10 @@ import { PageContext } from "../../auth/PageContext";
 import PostGalleryImg from "../../gallery/PostGalleryImg";
 import { scrollIntoView } from "../../../helpers/dom";
 import JumpFab from "../../comment/JumpFab";
+import { OTapToCollapseType } from "../../../services/db";
+import Locked from "./Locked";
+import useAppToast from "../../../helpers/useAppToast";
+import { postLocked } from "../../../helpers/toastMessages";
 
 const BorderlessIonItem = styled(IonItem)`
   --padding-start: 0;
@@ -122,7 +126,7 @@ export default function PostDetail({
   commentPath,
   sort,
 }: PostDetailProps) {
-  const [collapsed, setCollapsed] = useState(!!commentPath);
+  const [collapsed, setCollapsed] = useState(false);
   const dispatch = useAppDispatch();
   const markdownLoneImage = useMemo(
     () => (post?.post.body ? findLoneImage(post.post.body) : undefined),
@@ -135,6 +139,10 @@ export default function PostDetail({
   const { presentLoginIfNeeded, presentCommentReply } = useContext(PageContext);
   const [ionViewEntered, setIonViewEntered] = useState(false);
   const commentsRef = useRef<CommentsHandle>(null);
+  const { tapToCollapse } = useAppSelector(
+    (state) => state.settings.general.comments,
+  );
+  const presentToast = useAppToast();
 
   const [viewAllCommentsSpace, setViewAllCommentsSpace] = useState(70); // px
 
@@ -206,6 +214,12 @@ export default function PostDetail({
             if (e.target instanceof HTMLElement && e.target.nodeName === "A")
               return;
 
+            if (
+              tapToCollapse === OTapToCollapseType.Neither ||
+              tapToCollapse === OTapToCollapseType.OnlyComments
+            )
+              return;
+
             setCollapsed(!collapsed);
           }}
         >
@@ -218,8 +232,7 @@ export default function PostDetail({
               </Title>
               {!collapsed && renderText()}
               <By>
-                {post.counts.featured_community ||
-                post.counts.featured_local ? (
+                {post.post.featured_community || post.post.featured_local ? (
                   <AnnouncementIcon icon={megaphone} />
                 ) : undefined}
                 <CommunityLink
@@ -230,6 +243,7 @@ export default function PostDetail({
                 <PersonLink person={post.creator} prefix="by" />
               </By>
               <Stats post={post} />
+              {post.post.locked && <Locked />}
             </PostDeets>
           </Container>
         </BorderlessIonItem>
@@ -238,6 +252,10 @@ export default function PostDetail({
             post={post}
             onReply={async () => {
               if (presentLoginIfNeeded()) return;
+              if (post.post.locked) {
+                presentToast(postLocked);
+                return;
+              }
 
               const reply = await presentCommentReply(post);
 

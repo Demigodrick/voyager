@@ -14,16 +14,11 @@ import {
   chatbubblesOutline,
   flameOutline,
   helpCircleOutline,
+  skullOutline,
   timeOutline,
+  trendingUpOutline,
   trophyOutline,
 } from "ionicons/icons";
-
-import calendarWeekIconSvg from "./icons/calendarWeek.svg";
-import calendarSingleDaySvg from "./icons/calendarSingleDay.svg";
-import clockBadgeOneSvg from "./icons/clockBadgeOne.svg";
-import clockBadgeSixSvg from "./icons/clockBadgeSix.svg";
-import clockBadgeTwelveSvg from "./icons/clockBadgeTwelve.svg";
-import calendarYearSvg from "./icons/calendarYear.svg";
 
 import { useAppDispatch, useAppSelector } from "../../store";
 import { updateSortType } from "../post/postSlice";
@@ -32,6 +27,18 @@ import { startCase } from "lodash";
 import { SortType } from "lemmy-js-client";
 import { scrollUpIfNeeded } from "../../helpers/scrollUpIfNeeded";
 import { AppContext } from "../auth/AppContext";
+import useSupported, { is019Sort } from "../../helpers/useSupported";
+import {
+  calendarNineMonths,
+  calendarSingleDay,
+  calendarSixMonths,
+  calendarThreeMonths,
+  calendarWeek,
+  calendarYear,
+  clockBadgeOne,
+  clockBadgeSix,
+  clockBadgeTwelve,
+} from "../icons";
 
 type ExtendedSortType = SortType | "Top";
 
@@ -40,6 +47,8 @@ export const POST_SORTS = [
   "Hot",
   "Top",
   "New",
+  "Controversial",
+  "Scaled",
   "MostComments",
   "NewComments",
 ] as const;
@@ -51,6 +60,9 @@ export const TOP_POST_SORTS = [
   "TopDay",
   "TopWeek",
   "TopMonth",
+  "TopThreeMonths",
+  "TopSixMonths",
+  "TopNineMonths",
   "TopYear",
   "TopAll",
 ] as const;
@@ -77,6 +89,15 @@ export default function PostSort() {
   const [open, setOpen] = useState(false);
   const [topOpen, setTopOpen] = useState(false);
   const { activePageRef } = useContext(AppContext);
+  const newSorts = useSupported("v0.19 Sorts");
+
+  const supportedSortButtons = newSorts
+    ? BUTTONS
+    : BUTTONS.filter(({ data }) => !is019Sort(data));
+
+  const supportedTopSortButtons = newSorts
+    ? TOP_BUTTONS
+    : TOP_BUTTONS.filter(({ data }) => !is019Sort(data));
 
   return (
     <>
@@ -102,7 +123,7 @@ export default function PostSort() {
           }
         }}
         header="Sort by..."
-        buttons={BUTTONS.map((b) => ({
+        buttons={supportedSortButtons.map((b) => ({
           ...b,
           cssClass: b.data === "Top" ? "detail" : undefined,
           text:
@@ -128,7 +149,7 @@ export default function PostSort() {
           }
         }}
         header="Sort by Top for..."
-        buttons={TOP_BUTTONS.map((b) => ({
+        buttons={supportedTopSortButtons.map((b) => ({
           ...b,
           role: sort === b.data ? "selected" : undefined,
         }))}
@@ -150,25 +171,37 @@ function getSortIcon(sort: ExtendedSortType): string {
     case "NewComments":
       return chatbubbleEllipsesOutline;
     case "TopHour":
-      return clockBadgeOneSvg;
+      return clockBadgeOne;
     case "TopSixHour":
-      return clockBadgeSixSvg;
+      return clockBadgeSix;
     case "TopTwelveHour":
-      return clockBadgeTwelveSvg;
+      return clockBadgeTwelve;
     case "TopDay":
-      return calendarSingleDaySvg;
+      return calendarSingleDay;
     case "TopMonth":
       return calendarOutline;
     case "TopWeek":
-      return calendarWeekIconSvg;
+      return calendarWeek;
     case "TopYear":
-      return calendarYearSvg;
+      return calendarYear;
     case "TopAll":
       return trophyOutline;
     case "Top":
       return barChartOutline;
     case "Old":
       return helpCircleOutline;
+
+    // lemmy v0.19 below
+    case "Controversial":
+      return skullOutline;
+    case "Scaled":
+      return trendingUpOutline;
+    case "TopNineMonths":
+      return calendarNineMonths;
+    case "TopSixMonths":
+      return calendarSixMonths;
+    case "TopThreeMonths":
+      return calendarThreeMonths;
   }
 }
 
@@ -182,10 +215,16 @@ function formatTopLabel(sort: (typeof TOP_POST_SORTS)[number]): string {
       return "12 Hours";
     case "TopDay":
       return "Day";
-    case "TopMonth":
-      return "Month";
     case "TopWeek":
       return "Week";
+    case "TopMonth":
+      return "Month";
+    case "TopThreeMonths":
+      return "3 Months";
+    case "TopSixMonths":
+      return "6 Months";
+    case "TopNineMonths":
+      return "9 Months";
     case "TopYear":
       return "Year";
     case "TopAll":

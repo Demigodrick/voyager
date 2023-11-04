@@ -1,12 +1,12 @@
 import React, {
-  ComponentType,
+  Fragment,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import {
   IonRefresher,
   IonRefresherContent,
@@ -16,59 +16,107 @@ import { LIMIT as DEFAULT_LIMIT } from "../../services/lemmy";
 import { CenteredSpinner } from "../../pages/posts/PostPage";
 import { pullAllBy } from "lodash";
 import { useSetActivePage } from "../auth/AppContext";
-import EndPost from "./endItems/EndPost";
-import { useAppSelector } from "../../store";
-import { OPostAppearanceType } from "../../services/db";
-import { markReadOnScrollSelector } from "../settings/settingsSlice";
+import EndPost, { EndPostProps } from "./endItems/EndPost";
 import { isSafariFeedHackEnabled } from "../../pages/shared/FeedContent";
-import useFeedOnScroll from "./useFeedOnScroll";
 import FeedLoadMoreFailed from "./endItems/FeedLoadMoreFailed";
+import { VList, VListHandle } from "virtua";
+import { FeedSearchContext } from "../../pages/shared/CommunityPage";
+import { useAppSelector } from "../../store";
 
 export type FetchFn<I> = (page: number) => Promise<I[]>;
 
-export interface FeedProps<I> {
+export interface FeedProps<I>
+  extends Partial<Pick<EndPostProps, "sortDuration">> {
   itemsRef?: React.MutableRefObject<I[] | undefined>;
   fetchFn: FetchFn<I>;
+
+  /**
+   * Filters feed immediately. You can hide and unhide live
+   * (hidden items are kept in memory)
+   *
+   * @related filterOnRxFn
+   */
   filterFn?: (item: I) => boolean;
+
+  /**
+   * `filterOnRxFn` runs once data is received from the API.
+   * If an item is filtered, it's tossed and cannot be recovered
+   * without refreshing the feed.
+   *
+   * @related filterFn
+   */
+  filterOnRxFn?: (item: I) => boolean;
+
   getIndex?: (item: I) => number | string;
   renderItemContent: (item: I) => React.ReactNode;
-  header?: ComponentType<{ context?: unknown }>;
+  header?: React.ReactElement;
   limit?: number;
+
+  /**
+   * Called with item(s) scrolled off the top of the users' viewport
+   */
+  onRemovedFromTop?: (items: I[]) => void;
 
   communityName?: string;
 }
+
+/**
+ * Maximum requests to loop through (for example, searching for unhidden posts) before giving up
+ */
+const MAX_REQUEST_LOOP = 20;
 
 export default function Feed<I>({
   itemsRef,
   fetchFn,
   filterFn,
+  filterOnRxFn,
   renderItemContent,
   header,
   communityName,
   getIndex,
   limit = DEFAULT_LIMIT,
+  sortDuration,
+  onRemovedFromTop,
 }: FeedProps<I>) {
   const [page, setPage] = useState(0);
   const [items, setitems] = useState<I[]>([]);
-  const [loading, setLoading] = useState<boolean | undefined>();
-  const [isListAtTop, setIsListAtTop] = useState<boolean>(true);
-  const [atEnd, setAtEnd] = useState(false);
-  const postAppearanceType = useAppSelector(
+  const [loading, _setLoading] = useState(false);
+  const loadingRef = useRef(false);
+  const [isListAtTop, setIsListAtTop] = useState(true);
+  const [atEnd, _setAtEnd] = useState(false);
+  const atEndRef = useRef(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const { setScrolledPastSearch } = useContext(FeedSearchContext);
+  const startRangeRef = useRef(0);
+  const scrollingRef = useRef(false);
+
+  const postType = useAppSelector(
     (state) => state.settings.appearance.posts.type,
   );
-  const [loadFailed, setLoadFailed] = useState(true);
+
+  // If you have everything filtered, don't continue polling API indefinitely
+  const requestLoopRef = useRef(0);
 
   const filteredItems = useMemo(
     () => (filterFn ? items.filter(filterFn) : items),
     [filterFn, items],
   );
 
-  const markReadOnScroll = useAppSelector(markReadOnScrollSelector);
+  function setLoading(loading: boolean) {
+    _setLoading(loading);
+    loadingRef.current = loading;
+  }
+
+  function setAtEnd(atEnd: boolean) {
+    _setAtEnd(atEnd);
+    atEndRef.current = atEnd;
+  }
 
   const fetchMore = useCallback(
     async (refresh = false) => {
-      if (loading) return;
-      if (atEnd && !refresh) return;
+      if (loadingRef.current) return;
+      if (atEndRef.current && !refresh) return;
+
       setLoading(true);
 
       const currentPage = refresh ? 1 : page + 1;
@@ -85,28 +133,39 @@ export default function Feed<I>({
         setLoading(false);
       }
 
+      const filteredItems = filterOnRxFn ? items.filter(filterOnRxFn) : items;
+
       setLoadFailed(false);
 
       if (refresh) {
         setAtEnd(false);
-        setitems(items);
+        setitems(filteredItems);
       } else {
         setitems((existingPosts) => {
           const result = [...existingPosts];
-          const newPosts = pullAllBy(items.slice(), existingPosts, getIndex);
+          const newPosts = pullAllBy(
+            filteredItems.slice(),
+            existingPosts,
+            getIndex,
+          );
           result.splice(currentPage * limit, limit, ...newPosts);
           return result;
         });
       }
 
-      if (!items.length) setAtEnd(true);
+      if (!filteredItems.length) {
+        requestLoopRef.current++;
+      } else {
+        requestLoopRef.current = 0;
+      }
+
+      if (!items.length || requestLoopRef.current > MAX_REQUEST_LOOP)
+        setAtEnd(true);
 
       setPage(currentPage);
     },
-    [atEnd, fetchFn, limit, loading, page, getIndex],
+    [fetchFn, limit, page, getIndex, filterOnRxFn],
   );
-
-  const { onScroll } = useFeedOnScroll({ fetchMore });
 
   useEffect(() => {
     if (!itemsRef) return;
@@ -116,40 +175,42 @@ export default function Feed<I>({
 
   // Fetch more items if there are less than FETCH_MORE_THRESHOLD items left due to filtering
   useEffect(() => {
-    const fetchMoreThreshold = limit / 2;
-    const currentPageItems = items.slice((page - 1) * limit, page * limit);
+    const FETCH_MORE_THRESHOLD = limit / 2;
 
-    const currentPageFilteredItems = filteredItems.filter(
-      (item) => currentPageItems.indexOf(item) !== -1,
-    );
-
-    if (
-      loading ||
-      currentPageItems.length - currentPageFilteredItems.length <
-        fetchMoreThreshold
-    )
+    if (loading || loadFailed || filteredItems.length > FETCH_MORE_THRESHOLD)
       return;
 
     fetchMore();
+  }, [filteredItems, items, page, loading, limit, loadFailed, fetchMore]);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredItems, filteredItems, items, items, page, loading]);
+  const virtuaHandle = useRef<VListHandle>(null);
 
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-
-  useSetActivePage(virtuosoRef);
+  useSetActivePage(virtuaHandle);
 
   useEffect(() => {
     fetchMore(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchFn]);
 
-  const footer = useCallback(() => {
+  const footer = (() => {
     if (loadFailed)
-      return <FeedLoadMoreFailed fetchMore={fetchMore} loading={!!loading} />;
+      return (
+        <FeedLoadMoreFailed
+          fetchMore={fetchMore}
+          loading={!!loading}
+          key="footer"
+        />
+      );
     else if (atEnd)
-      return <EndPost empty={!items.length} communityName={communityName} />;
-  }, [atEnd, communityName, items.length, loadFailed, fetchMore, loading]);
+      return (
+        <EndPost
+          empty={!items.length}
+          communityName={communityName}
+          sortDuration={sortDuration}
+          key="footer"
+        />
+      );
+  })();
 
   async function handleRefresh(event: RefresherCustomEvent) {
     try {
@@ -158,20 +219,6 @@ export default function Feed<I>({
       event.detail.complete();
     }
   }
-
-  const itemContent = useCallback(
-    (index: number) => {
-      const item = filteredItems[index];
-
-      return renderItemContent(item);
-    },
-    [filteredItems, renderItemContent],
-  );
-
-  const computeItemKey = useCallback(
-    (index: number) => (getIndex ? getIndex(filteredItems[index]) : index),
-    [filteredItems, getIndex],
-  );
 
   if ((loading && !filteredItems.length) || loading === undefined)
     return <CenteredSpinner />;
@@ -186,37 +233,58 @@ export default function Feed<I>({
         <IonRefresherContent />
       </IonRefresher>
 
-      <Virtuoso
+      <VList
         className={
-          isSafariFeedHackEnabled ? undefined : "ion-content-scroll-host"
+          isSafariFeedHackEnabled
+            ? "virtual-scroller"
+            : "ion-content-scroll-host virtual-scroller"
         }
-        ref={virtuosoRef}
+        ref={virtuaHandle}
         style={{ height: "100%" }}
-        atTopStateChange={setIsListAtTop}
-        computeItemKey={computeItemKey}
-        totalCount={filteredItems.length}
-        itemContent={itemContent}
-        components={{ Header: header, Footer: footer }}
-        onScroll={onScroll}
-        increaseViewportBy={
-          postAppearanceType === OPostAppearanceType.Compact
-            ? // Compact posts have fixed size, so we don't need to proactively render
-              markReadOnScroll
-              ? {
-                  // Intersection observer needs time to work when quickly scrolling
-                  // TODO it would be nice if we could just detect if removed from top or bottom of
-                  // page on unmount
-                  top: 150,
-                  bottom: 0,
-                }
-              : 0
-            : {
-                // Height of post depends on image aspect ratio, so load extra off screen
-                top: 200,
-                bottom: 800,
-              }
-        }
-      />
+        onScrollStop={() => {
+          scrollingRef.current = false;
+        }}
+        onScroll={(offset) => {
+          scrollingRef.current = true;
+          setIsListAtTop(offset < 10);
+          setScrolledPastSearch(offset > 40);
+        }}
+        onRangeChange={(start, end) => {
+          if (start < 0 || end < 0 || (!start && !end)) return; // no items rendered
+
+          // if scrolled down
+          const startOffset = header ? 1 : 0; // header counts as item to VList
+          if (
+            scrollingRef.current &&
+            start > startOffset &&
+            start > startRangeRef.current
+          ) {
+            // emit what was removed
+            onRemovedFromTop?.(
+              filteredItems.slice(
+                startRangeRef.current - startOffset,
+                start - startOffset,
+              ),
+            );
+          }
+
+          startRangeRef.current = start;
+
+          if (end + 10 > filteredItems.length && !loadFailed) {
+            fetchMore();
+          }
+        }}
+        /* Large posts reflow with image load, so mount to dom a bit sooner */
+        overscan={postType === "large" ? 1 : 0}
+      >
+        {header}
+        {filteredItems.map((i) => (
+          <Fragment key={getIndex ? getIndex(i) : `${i}`}>
+            {renderItemContent(i)}
+          </Fragment>
+        ))}
+        {footer}
+      </VList>
     </>
   );
 }

@@ -6,6 +6,8 @@ import { useAppDispatch, useAppSelector } from "../../store";
 import { updateCommentCollapseState } from "./commentSlice";
 import { Person } from "lemmy-js-client";
 import CommentExpander from "./CommentExpander";
+import { OTapToCollapseType } from "../../services/db";
+import { getOffsetTop, scrollIntoView } from "../../helpers/dom";
 
 interface CommentTreeProps {
   comment: CommentNodeI;
@@ -25,11 +27,13 @@ export default function CommentTree({
   rootIndex,
 }: CommentTreeProps) {
   const dispatch = useAppDispatch();
-  const commentCollapsedById = useAppSelector(
-    (state) => state.comment.commentCollapsedById,
+  const collapsed = useAppSelector(
+    (state) =>
+      state.comment.commentCollapsedById[comment.comment_view.comment.id],
   );
-
-  const collapsed = commentCollapsedById[comment.comment_view.comment.id];
+  const { tapToCollapse } = useAppSelector(
+    (state) => state.settings.general.comments,
+  );
 
   // Comment context chains don't show missing for parents
   const showMissing = useMemo(() => {
@@ -62,7 +66,17 @@ export default function CommentTree({
         comment={comment.comment_view}
         highlightedCommentId={highlightedCommentId}
         depth={comment.depth}
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={(e) => {
+          if (
+            tapToCollapse === OTapToCollapseType.Neither ||
+            tapToCollapse === OTapToCollapseType.OnlyHeaders
+          )
+            return;
+
+          setCollapsed(!collapsed);
+
+          scrollViewUpIfNeeded(e.target);
+        }}
         collapsed={collapsed}
         fullyCollapsed={!!fullyCollapsed}
         rootIndex={rootIndex}
@@ -93,4 +107,20 @@ export default function CommentTree({
   }
 
   return payload;
+}
+
+export function scrollViewUpIfNeeded(target: EventTarget) {
+  if (!(target instanceof HTMLElement)) return;
+
+  const scrollView = target.closest(".virtual-scroller");
+  const item = target.closest("ion-item-sliding")?.querySelector("ion-item");
+
+  if (!(scrollView instanceof HTMLElement) || !(item instanceof HTMLElement))
+    return;
+
+  const itemOffsetTop = getOffsetTop(item, scrollView);
+
+  if (itemOffsetTop > scrollView.scrollTop) return;
+
+  scrollIntoView(item);
 }

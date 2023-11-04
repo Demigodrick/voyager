@@ -1,13 +1,18 @@
 import styled from "@emotion/styled";
 import { IonIcon } from "@ionic/react";
 import { LinkData } from "./CommentLinks";
-import { linkSharp, peopleSharp } from "ionicons/icons";
+import {
+  albumsOutline,
+  chatboxSharp,
+  linkSharp,
+  peopleSharp,
+  personSharp,
+} from "ionicons/icons";
 import { css } from "@emotion/react";
 import { getImageSrc } from "../../../services/lemmy";
 import { ReactNode, useMemo } from "react";
-import { matchLemmyCommunity } from "../../shared/markdown/LinkInterceptor";
-import { useAppSelector } from "../../../store";
 import { isUrlImage } from "../../../helpers/lemmy";
+import useLemmyUrlHandler from "../../shared/useLemmyUrlHandler";
 
 const shared = css`
   width: 30px;
@@ -37,21 +42,29 @@ interface LinkPreviewProps {
 }
 
 export default function LinkPreview({ link }: LinkPreviewProps): ReactNode {
-  const connectedInstance = useAppSelector(
-    (state) => state.auth.connectedInstance,
-  );
+  const { determineObjectTypeFromUrl } = useLemmyUrlHandler();
 
-  const isLemmyCommunity = useMemo(() => {
-    const url = new URL(link.url, `https://${connectedInstance}`);
+  const icon = useMemo(() => {
+    const type = determineObjectTypeFromUrl(link.url);
 
-    return !!matchLemmyCommunity(url.pathname);
-  }, [connectedInstance, link.url]);
+    switch (type) {
+      case "comment":
+        return chatboxSharp;
+      case "community":
+        return peopleSharp;
+      case "post":
+        return albumsOutline;
+      case "user":
+        return personSharp;
+      case undefined:
+        return linkSharp;
+    }
+  }, [link.url, determineObjectTypeFromUrl]);
 
   if (link.type === "image" || isUrlImage(link.url))
     return (
       <LinkImage src={getImageSrc(link.url, { size: 30 })} alt={link.text} />
     );
 
-  if (link.type === "link")
-    return <LinkIcon icon={isLemmyCommunity ? peopleSharp : linkSharp} />;
+  if (link.type === "link") return <LinkIcon icon={icon} />;
 }

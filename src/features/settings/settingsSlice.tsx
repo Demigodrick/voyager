@@ -34,6 +34,8 @@ import {
   OJumpButtonPositionType,
   DefaultFeedType,
   ODefaultFeedType,
+  TapToCollapseType,
+  OTapToCollapseType,
 } from "../../services/db";
 import { get, set } from "./storage";
 import { Mode } from "@ionic/core";
@@ -81,20 +83,25 @@ interface SettingsState {
   general: {
     comments: {
       collapseCommentThreads: CommentThreadCollapse;
+      tapToCollapse: TapToCollapseType;
       sort: CommentDefaultSort;
       showJumpButton: boolean;
       jumpButtonPosition: JumpButtonPositionType;
       highlightNewAccount: boolean;
       touchFriendlyLinks: boolean;
+      showCommentImages: boolean;
     };
     posts: {
       disableMarkingRead: boolean;
       markReadOnScroll: boolean;
       showHideReadButton: boolean;
+      autoHideRead: boolean;
+      disableAutoHideInCommunities: boolean;
     };
     enableHapticFeedback: boolean;
     linkHandler: LinkHandlerType;
     defaultFeed: DefaultFeedType | undefined;
+    noSubscribedInFeed: boolean;
   };
   blocks: {
     keywords: string[];
@@ -149,20 +156,25 @@ const initialState: SettingsState = {
   general: {
     comments: {
       collapseCommentThreads: OCommentThreadCollapse.Never,
+      tapToCollapse: OTapToCollapseType.Both,
       sort: OCommentDefaultSort.Hot,
       showJumpButton: false,
       jumpButtonPosition: OJumpButtonPositionType.RightBottom,
       highlightNewAccount: true,
       touchFriendlyLinks: true,
+      showCommentImages: false,
     },
     posts: {
       disableMarkingRead: false,
       markReadOnScroll: false,
       showHideReadButton: false,
+      autoHideRead: false,
+      disableAutoHideInCommunities: false,
     },
     enableHapticFeedback: true,
     linkHandler: OLinkHandlerType.InApp,
     defaultFeed: undefined,
+    noSubscribedInFeed: false,
   },
   blocks: {
     keywords: [],
@@ -235,6 +247,10 @@ export const appearanceSlice = createSlice({
       state.general.comments.collapseCommentThreads = action.payload;
       db.setSetting("collapse_comment_threads", action.payload);
     },
+    setTapToCollapse(state, action: PayloadAction<TapToCollapseType>) {
+      state.general.comments.tapToCollapse = action.payload;
+      db.setSetting("tap_to_collapse", action.payload);
+    },
     setShowJumpButton(state, action: PayloadAction<boolean>) {
       state.general.comments.showJumpButton = action.payload;
       db.setSetting("show_jump_button", action.payload);
@@ -254,6 +270,10 @@ export const appearanceSlice = createSlice({
       state.general.comments.touchFriendlyLinks = action.payload;
       db.setSetting("touch_friendly_links", action.payload);
     },
+    setShowCommentImages(state, action: PayloadAction<boolean>) {
+      state.general.comments.showCommentImages = action.payload;
+      db.setSetting("show_comment_images", action.payload);
+    },
     setPostAppearance(state, action: PayloadAction<PostAppearanceType>) {
       state.appearance.posts.type = action.payload;
       db.setSetting("post_appearance_type", action.payload);
@@ -269,6 +289,10 @@ export const appearanceSlice = createSlice({
     setDefaultFeed(state, action: PayloadAction<DefaultFeedType>) {
       state.general.defaultFeed = action.payload;
       // Per user setting is updated in StoreProvider
+    },
+    setNoSubscribedInFeed(state, action: PayloadAction<boolean>) {
+      state.general.noSubscribedInFeed = action.payload;
+      db.setSetting("no_subscribed_in_feed", action.payload);
     },
     setShowVotingButtons(state, action: PayloadAction<boolean>) {
       state.appearance.compact.showVotingButtons = action.payload;
@@ -327,6 +351,16 @@ export const appearanceSlice = createSlice({
 
       db.setSetting("show_hide_read_button", action.payload);
     },
+    setAutoHideRead(state, action: PayloadAction<boolean>) {
+      state.general.posts.autoHideRead = action.payload;
+
+      db.setSetting("auto_hide_read", action.payload);
+    },
+    setDisableAutoHideInCommunities(state, action: PayloadAction<boolean>) {
+      state.general.posts.disableAutoHideInCommunities = action.payload;
+
+      db.setSetting("disable_auto_hide_in_communities", action.payload);
+    },
     setTheme(state, action: PayloadAction<AppThemeType>) {
       state.appearance.theme = action.payload;
       set(LOCALSTORAGE_KEYS.THEME, action.payload);
@@ -352,13 +386,6 @@ export const appearanceSlice = createSlice({
     },
   },
 });
-
-export const markReadOnScrollSelector = (state: RootState) => {
-  return (
-    !state.settings.general.posts.disableMarkingRead &&
-    state.settings.general.posts.markReadOnScroll
-  );
-};
 
 export const setBlurNsfwState =
   (blurNsfw: PostBlurNsfwType) =>
@@ -439,6 +466,7 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
       const collapse_comment_threads = await db.getSetting(
         "collapse_comment_threads",
       );
+      const tap_to_collapse = await db.getSetting("tap_to_collapse");
       const show_jump_button = await db.getSetting("show_jump_button");
       const jump_button_position = await db.getSetting("jump_button_position");
       const highlight_new_account = await db.getSetting(
@@ -468,12 +496,20 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
       const show_hide_read_button = await db.getSetting(
         "show_hide_read_button",
       );
+      const auto_hide_read = await db.getSetting("auto_hide_read");
+      const disable_auto_hide_in_communities = await db.getSetting(
+        "disable_auto_hide_in_communities",
+      );
       const enable_haptic_feedback = await db.getSetting(
         "enable_haptic_feedback",
       );
       const link_handler = await db.getSetting("link_handler");
       const filtered_keywords = await db.getSetting("filtered_keywords");
       const touch_friendly_links = await db.getSetting("touch_friendly_links");
+      const show_comment_images = await db.getSetting("show_comment_images");
+      const no_subscribed_in_feed = await db.getSetting(
+        "no_subscribed_in_feed",
+      );
 
       return {
         ...state.settings,
@@ -513,6 +549,8 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
             collapseCommentThreads:
               collapse_comment_threads ??
               initialState.general.comments.collapseCommentThreads,
+            tapToCollapse:
+              tap_to_collapse ?? initialState.general.comments.tapToCollapse,
             sort: default_comment_sort ?? initialState.general.comments.sort,
             showJumpButton:
               show_jump_button ?? initialState.general.comments.showJumpButton,
@@ -525,6 +563,9 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
             touchFriendlyLinks:
               touch_friendly_links ??
               initialState.general.comments.touchFriendlyLinks,
+            showCommentImages:
+              show_comment_images ??
+              initialState.general.comments.showCommentImages,
           },
           posts: {
             disableMarkingRead:
@@ -536,11 +577,18 @@ export const fetchSettingsFromDatabase = createAsyncThunk<SettingsState>(
             showHideReadButton:
               show_hide_read_button ??
               initialState.general.posts.showHideReadButton,
+            autoHideRead:
+              auto_hide_read ?? initialState.general.posts.autoHideRead,
+            disableAutoHideInCommunities:
+              disable_auto_hide_in_communities ??
+              initialState.general.posts.disableAutoHideInCommunities,
           },
           linkHandler: link_handler ?? initialState.general.linkHandler,
           enableHapticFeedback:
             enable_haptic_feedback ?? initialState.general.enableHapticFeedback,
           defaultFeed: initialState.general.defaultFeed,
+          noSubscribedInFeed:
+            no_subscribed_in_feed ?? initialState.general.noSubscribedInFeed,
         },
         blocks: {
           keywords: filtered_keywords ?? initialState.blocks.keywords,
@@ -565,10 +613,12 @@ export const {
   setUserInstanceUrlDisplay,
   setProfileLabel,
   setCommentsCollapsed,
+  setTapToCollapse,
   setShowJumpButton,
   setJumpButtonPosition,
   setHighlightNewAccount,
   setTouchFriendlyLinks,
+  setShowCommentImages,
   setNsfwBlur,
   setFilteredKeywords,
   setPostAppearance,
@@ -584,11 +634,14 @@ export const {
   setDisableMarkingPostsRead,
   setMarkPostsReadOnScroll,
   setShowHideReadButton,
+  setAutoHideRead,
+  setDisableAutoHideInCommunities,
   setTheme,
   setEnableHapticFeedback,
   setLinkHandler,
   setPureBlack,
   setDefaultFeed,
+  setNoSubscribedInFeed,
 } = appearanceSlice.actions;
 
 export default appearanceSlice.reducer;

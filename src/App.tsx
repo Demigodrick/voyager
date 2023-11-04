@@ -38,6 +38,10 @@ import { Keyboard } from "@capacitor/keyboard";
 import { TabContextProvider } from "./TabContext";
 import { NavModes } from "capacitor-android-nav-mode";
 import { TextRecoveryStartupPrompt } from "./helpers/useTextRecovery";
+import { ErrorBoundary } from "react-error-boundary";
+import AppCrash from "./AppCrash";
+
+import "./statusTap";
 
 // index.tsx ensurxes android nav mode resolves before app is rendered
 (async () => {
@@ -51,6 +55,7 @@ import { TextRecoveryStartupPrompt } from "./helpers/useTextRecovery";
   setupIonicReact({
     rippleEffect: false,
     mode: getDeviceMode(),
+    statusTap: false, // custom implementation statusTap.ts
     swipeBackEnabled:
       isInstalled() &&
       getDeviceMode() === "ios" &&
@@ -95,14 +100,16 @@ export default function App() {
             <BeforeInstallPromptProvider>
               <UpdateContextProvider>
                 <Router>
-                  <TabContextProvider>
-                    <IonApp>
-                      <TextRecoveryStartupPrompt />
-                      <Auth>
-                        <TabbedRoutes />
-                      </Auth>
-                    </IonApp>
-                  </TabContextProvider>
+                  <IonApp>
+                    <ErrorBoundary FallbackComponent={AppCrash}>
+                      <TabContextProvider>
+                        <TextRecoveryStartupPrompt />
+                        <Auth>
+                          <TabbedRoutes />
+                        </Auth>
+                      </TabContextProvider>
+                    </ErrorBoundary>
+                  </IonApp>
                 </Router>
               </UpdateContextProvider>
             </BeforeInstallPromptProvider>
